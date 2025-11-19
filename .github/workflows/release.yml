@@ -10,7 +10,7 @@ env:
 
 jobs:
   release:
-    name: Release Binary
+    name: Release Windows Binary
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -31,8 +31,8 @@ jobs:
       - name: Fix git permissions
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      # 安装CGO编译所需的依赖
-      - name: Install build dependencies
+      # 安装Windows交叉编译工具链
+      - name: Install Windows cross-compilation tools
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -40,32 +40,55 @@ jobs:
             cmake \
             git \
             pkg-config \
-            libmp3lame-dev \
             gcc-mingw-w64-x86-64 \
-            gcc-mingw-w64-i686 \
-            gcc-aarch64-linux-gnu \
-            gcc-arm-linux-gnueabihf
+            g++-mingw-w64-x86-64
 
-      # 构建whisper.cpp库
-      - name: Build whisper.cpp
+      # 构建whisper.cpp的Windows版本
+      - name: Build whisper.cpp for Windows
         run: |
           git clone https://github.com/ggerganov/whisper.cpp.git /tmp/whisper
           cd /tmp/whisper
-          mkdir build
-          cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release \
-                   -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+          mkdir build-windows
+          cd build-windows
+          
+          # 使用mingw交叉编译
+          cmake .. \
+            -DCMAKE_SYSTEM_NAME=Windows \
+            -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DCMAKE_INSTALL_PREFIX=/usr/x86_64-w64-mingw32
+          
           make -j$(nproc)
           sudo make install
-          sudo ldconfig
 
-      # 设置CGO环境变量
-      - name: Set CGO environment
+      # 构建lame的Windows版本
+      - name: Build lame for Windows
+        run: |
+          wget http://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz
+          tar -xzf lame-3.100.tar.gz
+          cd lame-3.100
+          
+          ./configure \
+            --host=x86_64-w64-mingw32 \
+            --prefix=/usr/x86_64-w64-mingw32 \
+            --enable-static \
+            --disable-shared
+          
+          make -j$(nproc)
+          sudo make install
+
+      # 设置Windows CGO环境变量
+      - name: Set Windows CGO environment
         run: |
           echo "CGO_ENABLED=1" >> $GITHUB_ENV
-          echo "CGO_CFLAGS=-I/usr/local/include" >> $GITHUB_ENV
-          echo "CGO_LDFLAGS=-L/usr/local/lib -lwhisper -lmp3lame" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "CC=x86_64-w64-mingw32-gcc" >> $GITHUB_ENV
+          echo "CXX=x86_64-w64-mingw32-g++" >> $GITHUB_ENV
+          echo "CGO_CFLAGS=-I/usr/x86_64-w64-mingw32/include" >> $GITHUB_ENV
+          echo "CGO_LDFLAGS=-L/usr/x86_64-w64-mingw32/lib -lwhisper -lmp3lame -static" >> $GITHUB_ENV
+          echo "GOOS=windows" >> $GITHUB_ENV
+          echo "GOARCH=amd64" >> $GITHUB_ENV
 
       - name: Install UPX
         uses: crazy-max/ghaction-upx@v3
