@@ -43,24 +43,29 @@ jobs:
             gcc-mingw-w64-x86-64 \
             g++-mingw-w64-x86-64
 
-      # 构建whisper.cpp的Windows版本
+      # 构建whisper.cpp的Windows版本（使用兼容版本）
       - name: Build whisper.cpp for Windows
         run: |
           git clone https://github.com/ggerganov/whisper.cpp.git /tmp/whisper
           cd /tmp/whisper
+          # 切换到较稳定的版本，避免新API问题
+          git checkout v1.5.4
           mkdir build-windows
           cd build-windows
           
-          # 使用mingw交叉编译
+          # 使用mingw交叉编译，禁用可能有问题的功能
           cmake .. \
             -DCMAKE_SYSTEM_NAME=Windows \
             -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
             -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-            -DCMAKE_INSTALL_PREFIX=/usr/x86_64-w64-mingw32
+            -DCMAKE_INSTALL_PREFIX=/usr/x86_64-w64-mingw32 \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_EXAMPLES=OFF \
+            -DGGML_NATIVE=OFF
           
-          make -j$(nproc)
+          make -j$(nproc) whisper
           sudo make install
 
       # 构建lame的Windows版本
