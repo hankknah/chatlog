@@ -22,7 +22,25 @@ jobs:
       - name: Fix git permissions
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      # 下载预编译的whisper库
+      - name: Download precompiled whisper libraries
+        run: |
+          # 创建必要的目录
+          mkdir -p /usr/x86_64-w64-mingw32/include
+          mkdir -p /usr/x86_64-w64-mingw32/lib
+          mkdir -p /usr/local/include
+          mkdir -p /usr/local/lib
+          
+          # 下载whisper.cpp源码获取头文件
+          git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git /tmp/whisper-src
+          cp /tmp/whisper-src/include/whisper.h /usr/x86_64-w64-mingw32/include/
+          cp /tmp/whisper-src/include/whisper.h /usr/local/include/
+          cp /tmp/whisper-src/ggml/include/ggml.h /usr/x86_64-w64-mingw32/include/
+          cp /tmp/whisper-src/ggml/include/ggml.h /usr/local/include/
+
       - name: Run GoReleaser
         run: goreleaser release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CGO_CFLAGS: "-I/usr/x86_64-w64-mingw32/include -I/usr/local/include"
+          CGO_LDFLAGS: "-L/usr/x86_64-w64-mingw32/lib -L/usr/local/lib"
