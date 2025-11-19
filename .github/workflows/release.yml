@@ -23,8 +23,49 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
       - name: Fix git permissions
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # 安装CGO编译所需的依赖
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            git \
+            pkg-config \
+            libmp3lame-dev \
+            gcc-mingw-w64-x86-64 \
+            gcc-mingw-w64-i686 \
+            gcc-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabihf
+
+      # 构建whisper.cpp库
+      - name: Build whisper.cpp
+        run: |
+          git clone https://github.com/ggerganov/whisper.cpp.git /tmp/whisper
+          cd /tmp/whisper
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release \
+                   -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
+
+      # 设置CGO环境变量
+      - name: Set CGO environment
+        run: |
+          echo "CGO_ENABLED=1" >> $GITHUB_ENV
+          echo "CGO_CFLAGS=-I/usr/local/include" >> $GITHUB_ENV
+          echo "CGO_LDFLAGS=-L/usr/local/lib -lwhisper -lmp3lame" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
       - name: Install UPX
         uses: crazy-max/ghaction-upx@v3
